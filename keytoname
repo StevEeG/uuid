@@ -1,0 +1,61 @@
+using System.Collections.Generic;
+using System.Threading;
+using OpenMetaverse;
+
+namespace SecondLifeManager
+{
+    public class AvatarSearch
+    {
+        SecondLifeClient sl;
+        ManualResetEvent NameSearchEvent = new ManualResetEvent(false);
+        Dictionary<string, UUID> Name2Key = new Dictionary<string, UUID>();
+        Dictionary<UUID, string> Key2Name = new Dictionary<UUID, string>();
+
+        public AvatarSearch(SecondLifeClient sl)
+        {
+            this.sl = sl;
+            sl.client.Avatars.OnAvatarNameSearch += Avatars_OnAvatarNameSearch;
+            sl.client.Avatars.OnAvatarNames += Avatars_OnAvatarNames;
+        }
+
+        void Avatars_OnAvatarNames(Dictionary<UUID, string> names)
+        {
+            foreach (KeyValuePair<UUID, string> kvp in names)
+            {
+                if (!Name2Key.ContainsKey(kvp.Value)) Name2Key.Add(kvp.Value, kvp.Key);
+                if (!Key2Name.ContainsKey(kvp.Key)) Key2Name.Add(kvp.Key, kvp.Value);
+            }
+            NameSearchEvent.Set();
+        }
+        void Avatars_OnAvatarNameSearch(UUID queryID, Dictionary<UUID, string> names)
+        {
+            foreach (KeyValuePair<UUID, string> kvp in names)
+            {
+                if (!Name2Key.ContainsKey(kvp.Value)) Name2Key.Add(kvp.Value, kvp.Key);
+                if (!Key2Name.ContainsKey(kvp.Key)) Key2Name.Add(kvp.Key, kvp.Value);
+            }
+            NameSearchEvent.Set();
+        }
+        public string getName(UUID id)
+        {
+            if (!Key2Name.ContainsKey(id))
+            {
+                sl.client.Avatars.RequestAvatarName(id);
+                NameSearchEvent.WaitOne(Configuration.Utils.Key2NameTimeout, true);
+            }
+            if (Key2Name.ContainsKey(id)) return Key2Name[id];
+            return null;
+        }
+
+        public UUID getID(string avatarName)
+        {
+            if(!Name2Key.ContainsKey(avatarName))
+            {
+                sl.client.Avatars.RequestAvatarNameSearch(avatarName, UUID.Random());
+                NameSearchEvent.WaitOne(Configuration.Utils.Name2KeyTimeout, true);
+            }
+            if (Name2Key.ContainsKey(avatarName)) return Name2Key[avatarName];
+            return UUID.Zero;
+        }
+    }
+}
